@@ -15,7 +15,64 @@
 <!-- 引入 FontAwesome v6 CDN -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <!-- 引入 localforage CDN -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js">
+/* Sealed-letter interaction */
+(function setupSealedLetters(){
+ const sels=['[data-letter-card]','.letter-card','.letter-message','.message.letter','.chat-message.letter'];
+ const find=t=>{if(!(t instanceof Element))return null;for(const x of sels){const e=t.closest(x);if(e)return e}return null};
+ const open=c=>{if(!c||c.classList.contains('is-open'))return;c.classList.add('is-open');c.setAttribute('aria-expanded','true');const b=c.querySelector('[data-letter-body],.letter-body');if(b)b.hidden=false};
+ document.addEventListener('click',e=>{const c=find(e.target);if(c&&!c.classList.contains('is-open'))open(c)},{passive:true});
+ document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const c=find(e.target);if(c&&!c.classList.contains('is-open')){e.preventDefault();open(c)}});
+})();
+
+/* Letter categories: Sent / Received — scoped to the existing letter list. */
+(function setupLetterCategories(){
+  function init(){
+    const headings = [...document.querySelectorAll('h1,h2,h3,h4,.section-title,.page-title,.title')];
+    const heading = headings.find(el => /信/.test(el.textContent || ''));
+    if (!heading || document.querySelector('[data-letter-categories]')) return;
+
+    const section = heading.closest('section,.card,.panel,.setting-section,.page-section') || heading.parentElement;
+    if (!section) return;
+
+    const tabs = document.createElement('div');
+    tabs.dataset.letterCategories = '1';
+    tabs.style.cssText = 'display:flex;gap:8px;margin:10px 0 12px;';
+    tabs.innerHTML = `
+      <button type="button" data-letter-filter="all" class="mini">全部</button>
+      <button type="button" data-letter-filter="received" class="mini">收到的信</button>
+      <button type="button" data-letter-filter="sent" class="mini">寄出的信</button>
+    `;
+    heading.insertAdjacentElement('afterend', tabs);
+
+    const getLetterItems = () => [...section.querySelectorAll('[data-letter-type], .letter-card, .letter-message')];
+
+    function apply(filter){
+      getLetterItems().forEach(item => {
+        const type = (item.dataset.letterType || item.dataset.type || '').toLowerCase();
+        let show = true;
+        if (filter === 'received') show = type === 'received' || type === 'inbox' || type === 'incoming';
+        if (filter === 'sent') show = type === 'sent' || type === 'outbox' || type === 'outgoing';
+        item.style.display = show ? '' : 'none';
+      });
+      tabs.querySelectorAll('[data-letter-filter]').forEach(btn => {
+        btn.style.opacity = btn.dataset.letterFilter === filter ? '1' : '.55';
+      });
+    }
+
+    tabs.addEventListener('click', e => {
+      const btn = e.target.closest('[data-letter-filter]');
+      if (!btn) return;
+      apply(btn.dataset.letterFilter);
+    });
+
+    apply('all');
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once:true});
+  else init();
+})();
+
+</script>
 
 <style>
 :root {
@@ -404,6 +461,38 @@ i { display: inline-flex; align-items: center; justify-content: center; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .hidden-input { display: none; }
+
+/* Sealed letter: scoped to existing letter UI */
+.letter-envelope-card{position:relative;cursor:pointer;overflow:hidden;min-height:88px;transition:transform .18s ease,box-shadow .18s ease}
+.letter-envelope-card:active{transform:scale(.985)}
+.letter-envelope-front{display:flex;align-items:center;gap:12px;min-height:88px}
+.letter-envelope-icon{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:0 0 46px;background:rgba(255,255,255,.72);font-size:24px;box-shadow:0 2px 10px rgba(0,0,0,.05)}
+.letter-envelope-meta{min-width:0;flex:1}.letter-envelope-title{font-weight:700;font-size:15px;line-height:1.35}.letter-envelope-hint{font-size:12px;opacity:.55;margin-top:4px}.letter-envelope-seal{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.82);font-size:13px;flex:0 0 28px}
+.letter-envelope-body{display:none;animation:letterReveal .22s ease both}.letter-envelope-card.is-open .letter-envelope-front{display:none}.letter-envelope-card.is-open .letter-envelope-body{display:block}
+@keyframes letterReveal{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+/* Mobile browser horizontal gesture protection, without changing layout */
+.chat-scroll,.chat-messages,.message-list,.messages,#chatMessages{overscroll-behavior-x:none}
+.message,.message-row,.chat-row,.chat-message{touch-action:pan-y;-webkit-tap-highlight-color:transparent}
+
+[data-letter-categories] .mini{
+  flex:0 0 auto;
+  white-space:nowrap;
+}
+
+
+/* Tether letters: sealed envelope + sent/received filter */
+.letters-filter{display:flex;gap:8px;padding:0 16px 4px;flex:0 0 auto;overflow-x:auto;scrollbar-width:none}
+.letters-filter::-webkit-scrollbar{display:none}
+.letters-filter button{flex:0 0 auto;border:0;background:var(--card);color:var(--muted);border-radius:999px;padding:7px 13px;font:inherit;font-size:13px;box-shadow:0 1px 3px rgba(20,20,30,.05)}
+.letters-filter button.active{background:var(--accent);color:#fff}
+.letter-card.letter-sealed{position:relative;overflow:hidden}
+.letter-sealed .letter-body{display:none}
+.letter-sealed .letter-envelope-preview{display:flex;align-items:center;gap:10px;margin-top:12px;padding:12px 13px;border-radius:12px;background:var(--accent-soft);color:var(--muted)}
+.letter-envelope-preview i{font-size:20px;color:var(--accent);flex:0 0 auto}
+.letter-envelope-preview span{min-width:0;line-height:1.45}
+.letter-envelope-preview small{display:block;margin-top:2px;opacity:.72}
+
+.letters-filter button{cursor:pointer;pointer-events:auto;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 </style>
 <!-- 动态注入的自定义气泡样式 -->
 <style id="dynamicBubbleStyle"></style>
@@ -493,6 +582,11 @@ i { display: inline-flex; align-items: center; justify-content: center; }
 
     <!-- 信件视图 -->
     <div class="view flexcol hidden" id="view-letters">
+      <div class="letters-filter" id="lettersFilter">
+        <button type="button" data-letter-filter="all" class="active">全部</button>
+        <button type="button" data-letter-filter="received">收到的信</button>
+        <button type="button" data-letter-filter="sent">寄出的信</button>
+      </div>
       <div class="letters-list" id="lettersList"></div>
       <div class="letters-bar">
         <button id="openLetterCompose"><i class="fa-solid fa-pen-to-square"></i>写一封信</button>
@@ -1731,18 +1825,43 @@ function confirmModal(msg, onYes){
 /* ============================================================================
    信件
    ============================================================================ */
+let activeLetterFilter = 'all';
+
+function renderLetterFilter(){
+  document.querySelectorAll('#lettersFilter [data-letter-filter]').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.letterFilter===activeLetterFilter);
+  });
+}
+
 function renderLetters(){
   const list = document.getElementById('lettersList');
+  renderLetterFilter();
   if (state.letters.length===0){
     list.innerHTML = `<div class="empty-state"><i class="fa-solid fa-envelope"></i><div>还没有信件往来，写一封信给对方吧</div></div>`;
     return;
   }
-  const sorted = [...state.letters].sort((a,b)=> b.time - a.time);
+  const sorted = [...state.letters]
+    .filter(l => activeLetterFilter==='all'
+      || (activeLetterFilter==='sent' && l.from==='me')
+      || (activeLetterFilter==='received' && l.from==='partner'))
+    .sort((a,b)=> b.time - a.time);
+
+  if (!sorted.length){
+    list.innerHTML = `<div class="empty-state"><i class="fa-solid fa-envelope"></i><div>${activeLetterFilter==='sent'?'还没有寄出的信':'还没有收到的信'}</div></div>`;
+    return;
+  }
+
   list.innerHTML = sorted.map(letterHTML).join('');
-  list.querySelectorAll('.letter-card').forEach(card => {
-    card.addEventListener('click', () => openLetterDetail(card.dataset.id));
+  list.querySelectorAll('.letter-card').forEach(card=>{
+    card.addEventListener('click', ()=>openLetterDetail(card.dataset.id));
   });
 }
+document.querySelectorAll('#lettersFilter [data-letter-filter]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    activeLetterFilter = btn.dataset.letterFilter;
+    renderLetters();
+  });
+});
 function letterHTML(l){
   let statusLine = '';
   if (l.from==='me'){
@@ -1750,8 +1869,17 @@ function letterHTML(l){
       ? `<div class="letter-reply"><div class="letter-reply-head"><i class="fa-solid fa-envelope"></i>${escapeHTML(nameOf('partner'))}的回信</div><div class="letter-reply-body">${escapeHTML(l.replyText)}</div><div class="letter-time" style="margin-top:5px;">${fmtTime(l.replyTime)}</div></div>`
       : `<div class="letter-waiting"><i class="fa-solid fa-envelope"></i>${escapeHTML(l.waitingPhrase)}</div>`;
   }
-  return `<div class="letter-card" data-id="${l.id}">
-    <div class="letter-head"><img src="${avatarOf(l.from)}"><div><div class="letter-who">${escapeHTML(nameOf(l.from))}${l.from==='partner'?'（主动写信）':''}</div><div class="letter-time">${fmtTime(l.time)}</div></div></div>
+  const isReceived = l.from==='partner';
+  const envelopeHint = isReceived
+    ? '你收到了一封信 · 点开查看内容'
+    : (l.status==='replied' ? '信件已收到回信 · 点开查看内容' : '信件已寄出 · 等待回信');
+
+  return `<div class="letter-card letter-sealed" data-id="${l.id}">
+    <div class="letter-head"><img src="${avatarOf(l.from)}"><div><div class="letter-who">${escapeHTML(nameOf(l.from))}${isReceived?'主动写信':''}</div><div class="letter-time">${fmtTime(l.time)}</div></div></div>
+    <div class="letter-envelope-preview">
+      <i class="fa-solid ${isReceived?'fa-envelope-open-text':'fa-envelope'}"></i>
+      <span>${envelopeHint}<small>${isReceived?'轻轻点开信封，看看TA写了什么':'信件已经在路上了，耐心等待回信～'}</small></span>
+    </div>
     <div class="letter-body">${escapeHTML(l.text)}</div>
     ${statusLine}
   </div>`;
